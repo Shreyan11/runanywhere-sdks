@@ -139,6 +139,9 @@ target_link_libraries(voice-assistant PRIVATE
     # ONNX Runtime
     onnxruntime
 
+    # TTS phonemization
+    espeak-ng
+
     # System libraries
     ${ALSA_LIBRARIES}
     Threads::Threads
@@ -191,6 +194,10 @@ target_link_libraries(test-pipeline PRIVATE
     rac_backend_llamacpp
     sherpa-onnx-c-api
     onnxruntime
+
+    # TTS phonemization
+    espeak-ng
+
     Threads::Threads
     dl
 )

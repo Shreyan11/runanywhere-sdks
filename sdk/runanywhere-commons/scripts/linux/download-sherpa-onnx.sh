@@ -23,7 +23,7 @@ DEST_DIR="${ROOT_DIR}/third_party/sherpa-onnx-linux"
 # Load versions from centralized VERSIONS file
 source "${ROOT_DIR}/scripts/load-versions.sh"
 
-VERSION="${SHERPA_ONNX_VERSION_LINUX:-1.12.18}"
+VERSION="${SHERPA_ONNX_VERSION_LINUX:-1.12.20}"
 ARCH=$(uname -m)
 
 # Colors
@@ -87,8 +87,8 @@ if [ "$ARCH" = "aarch64" ]; then
     URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${VERSION}/sherpa-onnx-v${VERSION}-linux-aarch64-shared-cpu.tar.bz2"
     ARCHIVE_NAME="sherpa-onnx-v${VERSION}-linux-aarch64-shared-cpu"
 elif [ "$ARCH" = "x86_64" ]; then
-    URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${VERSION}/sherpa-onnx-v${VERSION}-linux-x64-shared-cpu.tar.bz2"
-    ARCHIVE_NAME="sherpa-onnx-v${VERSION}-linux-x64-shared-cpu"
+URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${VERSION}/sherpa-onnx-v${VERSION}-linux-x64-shared.tar.bz2"
+ARCHIVE_NAME="sherpa-onnx-v${VERSION}-linux-x64-shared"
 else
     print_error "Unsupported architecture: $ARCH"
     echo "Supported architectures: x86_64, aarch64"
@@ -121,8 +121,28 @@ TEMP_DIR=$(mktemp -d)
 trap "rm -rf ${TEMP_DIR}" EXIT
 
 print_step "Downloading Sherpa-ONNX v${VERSION}..."
-curl -L -o "${TEMP_DIR}/sherpa-onnx.tar.bz2" "${URL}"
+curl -L --fail --retry 3 --retry-delay 5 \
+    -o "${TEMP_DIR}/sherpa-onnx.tar.bz2" "${URL}" || {
 
+    # GitHub CDN failed — try HuggingFace mirror instead
+    echo ""
+    print_step "GitHub download failed, trying HuggingFace mirror..."
+    if [ "$ARCH" = "aarch64" ]; then
+        HF_URL="https://huggingface.co/csukuangfj/sherpa-onnx-libs/resolve/main/aarch64/sherpa-onnx-v${VERSION}-linux-aarch64-shared-cpu.tar.bz2"
+    else
+        HF_URL="https://huggingface.co/csukuangfj/sherpa-onnx-libs/resolve/main/x86_64/sherpa-onnx-v${VERSION}-linux-x64-shared-cpu.tar.bz2"
+    fi
+    curl -L --fail --retry 3 \
+        -o "${TEMP_DIR}/sherpa-onnx.tar.bz2" "${HF_URL}"
+}
+
+# Verify the download is actually a real archive (not a 9-byte error)
+FILESIZE=$(wc -c < "${TEMP_DIR}/sherpa-onnx.tar.bz2")
+if [ "${FILESIZE}" -lt 1000000 ]; then
+    print_error "Downloaded file is only ${FILESIZE} bytes — expected ~35MB+"
+    print_error "Contents: $(cat ${TEMP_DIR}/sherpa-onnx.tar.bz2)"
+    exit 1
+fi
 print_step "Extracting archive..."
 mkdir -p "${DEST_DIR}"
 tar -xjf "${TEMP_DIR}/sherpa-onnx.tar.bz2" -C "${TEMP_DIR}"

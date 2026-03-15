@@ -85,6 +85,9 @@ target_link_libraries(openclaw-assistant PRIVATE
     # ONNX Runtime
     onnxruntime
 
+    # TTS phonemization
+    espeak-ng
+
     # System libraries
     ${ALSA_LIBRARIES}
     Threads::Threads
@@ -118,6 +121,9 @@ target_link_libraries(test-components PRIVATE
 
     # ONNX Runtime
     onnxruntime
+
+    # TTS phonemization
+    espeak-ng
 
     # System libraries
     Threads::Threads
@@ -160,6 +166,9 @@ target_link_libraries(test-integration PRIVATE
 
     # ONNX Runtime
     onnxruntime
+
+    # TTS phonemization
+    espeak-ng
 
     # System libraries
     Threads::Threads

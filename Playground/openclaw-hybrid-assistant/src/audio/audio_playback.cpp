@@ -3,13 +3,13 @@
 // =============================================================================
 
 #include "audio_playback.h"
-
+#include "../pipeline/tts_queue.h"
 #include <alsa/asoundlib.h>
 #include <atomic>
 #include <cstring>
 
 namespace openclaw {
-
+class TTSQueue;
 // =============================================================================
 // Implementation
 // =============================================================================
@@ -17,6 +17,7 @@ namespace openclaw {
 struct AudioPlayback::Impl {
     snd_pcm_t* pcm_handle = nullptr;
     std::atomic<bool> playing{false};
+    std::unique_ptr<TTSQueue> async_queue_;
 };
 
 AudioPlayback::AudioPlayback()
@@ -29,6 +30,9 @@ AudioPlayback::AudioPlayback(const AudioPlaybackConfig& config)
 }
 
 AudioPlayback::~AudioPlayback() {
+    if (impl_->async_queue_) {
+        impl_->async_queue_->cancel();
+    }
     stop();
     if (impl_->pcm_handle) {
         snd_pcm_close(impl_->pcm_handle);
@@ -245,12 +249,38 @@ bool AudioPlayback::play_cancellable(const int16_t* samples, size_t num_samples,
 }
 
 bool AudioPlayback::play_async(const int16_t* samples, size_t num_samples) {
-    // For now, just call blocking play
-    // TODO: Implement proper async playback with a queue
-    return play(samples, num_samples);
+    if (!initialized_) {
+        last_error_ = "Not initialized";
+        return false;
+    }
+
+    // Initialize queue on first use
+    if (!impl_->async_queue_) {
+        impl_->async_queue_ = std::make_unique<TTSQueue>(
+            [this](const int16_t* audio, size_t count, int rate,
+                   const std::atomic<bool>& cancel_flag) {
+                // Delegate to existing blocking play
+                return play(audio, count);
+            }
+        );
+    }
+
+    // Create audio chunk
+    AudioChunk chunk;
+    chunk.samples.assign(samples, samples + num_samples);
+    chunk.sample_rate = config_.sample_rate;
+
+    // Push to existing TTSQueue
+    impl_->async_queue_->push(std::move(chunk));
+    impl_->async_queue_->finish();  // Signal this is a complete audio unit
+
+    return true;
 }
 
 void AudioPlayback::stop() {
+    if (impl_->async_queue_) {
+        impl_->async_queue_->cancel();
+    }
     if (impl_->pcm_handle) {
         snd_pcm_drop(impl_->pcm_handle);
         snd_pcm_prepare(impl_->pcm_handle);

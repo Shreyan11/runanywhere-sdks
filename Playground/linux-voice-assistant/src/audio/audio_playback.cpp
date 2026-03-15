@@ -16,6 +16,7 @@ namespace runanywhere {
 struct AudioPlayback::Impl {
     snd_pcm_t* pcm_handle = nullptr;
     std::atomic<bool> playing{false};
+    //std::unique_ptr<TTSQueue> async_queue_;
 };
 
 AudioPlayback::AudioPlayback()
